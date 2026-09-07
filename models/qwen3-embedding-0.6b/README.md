@@ -10,7 +10,7 @@ languages, weights published by Qwen themselves.
 | | |
 |---|---|
 | Weights | `Qwen3-Embedding-0.6B-Q8_0.gguf`, 639,150,592 bytes |
-| Parameters | 595,776,512 |
+| Parameters | 595,776,512, as the server reports them in `/v1/models` |
 | Dimension | 1024, counted on a real vector, not read off the model card |
 | Native window | 32,768; served here at 8,192, see below |
 | Pooling | `last` |

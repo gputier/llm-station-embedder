@@ -304,6 +304,15 @@ switch ($Action) {
       # a 4802-token text is served with -ub 2048.
       '-b','2048',
       '-ub','2048',
+      # No --cache-type-k / --cache-type-v, unlike every chat profile this box
+      # used to run. Those quantised the KV cache to q4_0 to buy context on an
+      # 8 GB card. Here the cache is what the attention computes the pooled
+      # vector FROM, so degrading it degrades the vectors themselves, silently
+      # and in a way no health check shows. The window is small enough that the
+      # full-precision cache fits with 4.8 GB to spare, so there is nothing to
+      # buy. This is reasoning, not a measurement: nobody has benchmarked
+      # quantised-cache embeddings on this box.
+      #
       # --no-mmap plus --mlock: hold the weights in resident memory instead of
       # letting Windows page them back from disk under pressure. 639 MB here,
       # so this costs almost nothing.
