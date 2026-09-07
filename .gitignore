@@ -1,0 +1,36 @@
+# Model weights: never commit these, they are hundreds of gigabytes.
+*.gguf
+*.safetensors
+*.bin
+
+# Server logs and runtime state.
+*.log
+llm-state.json
+instances/
+
+# Build artifacts.
+build-win/
+*.zip
+*.exe
+*.dll
+
+# Script backups. These hold PREVIOUS versions of the control script, which may
+# still contain the addresses and API key this repository was scrubbed of.
+*.bak
+*.bak-*
+*.ubak
+*.orig
+
+# Benchmark inputs and test fixtures. Vision testing is often done on real
+# documents; never let one reach a public repository.
+bench-prompt.json
+*-test.png
+*-test.jpg
+test-images/
+
+# Local secrets.
+.env
+.env.*
+api-key.txt
+*.key
+*.pem

@@ -1,0 +1,48 @@
+name: Bug report
+description: Something does not work as documented
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: What you observed, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: The exact command or request, and the action you passed to the control script.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server log
+      description: |
+        Relevant lines from llm-err-<name>.log. Note that llm-out-<name>.log is
+        always empty: llama-server writes everything to stderr.
+      render: shell
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and driver
+      placeholder: "RTX 5090, driver 616.56"
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: llama.cpp build
+      description: Version or commit. Flags differ between builds, this matters.
+    validations:
+      required: true
+  - type: checkboxes
+    id: sanity
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked `/props` rather than `/health` to know which model is actually loaded
+        - label: My report contains no hostname, IP address or credential
+          required: true

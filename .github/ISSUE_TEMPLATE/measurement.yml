@@ -1,0 +1,48 @@
+name: Measurement or counter-measurement
+description: You measured something that confirms, refines or contradicts a documented number
+labels: ["measurement"]
+body:
+  - type: textarea
+    id: claim
+    attributes:
+      label: What you measured
+      description: Which setting, and which documented number it relates to.
+    validations:
+      required: true
+  - type: textarea
+    id: numbers
+    attributes:
+      label: The numbers
+      description: Before and after, or yours against the documented one.
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware
+      placeholder: "GPU, driver, host RAM"
+    validations:
+      required: true
+  - type: dropdown
+    id: seed
+    attributes:
+      label: Was the seed fixed?
+      options:
+        - "Yes, fixed seed"
+        - "No, and I know that makes speculation comparisons unreliable"
+        - "Not applicable, speculation was disabled"
+    validations:
+      required: true
+  - type: input
+    id: runs
+    attributes:
+      label: Number of runs, and whether this is a median
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything that makes your setup different
+      description: |
+        Negative results are wanted here. An hypothesis you tested and disproved
+        saves the next person the same afternoon.
