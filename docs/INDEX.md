@@ -2,6 +2,7 @@
 
 | Document | What it covers |
 |---|---|
+| [security-gate.md](security-gate.md) | What runs before a push leaves this machine, how to wire it in a fresh clone, and what to do when it blocks |
 | [../README.md](../README.md) | Why the machine was repurposed, what it serves, and every figure measured on it |
 | [prerequisites.md](prerequisites.md) | What you need on the server and on the client before anything runs |
 | [operations.md](operations.md) | Starting, stopping, reading logs, proving what is loaded, and what breaks |

@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Local security gate, run before anything leaves for GitHub.
+#
+# Two scans, because they do not see the same thing. history-scan.sh reads the
+# commits actually being sent, which is where a secret hides once the file has
+# been cleaned up. security-scan.sh reads the working tree, which is where a
+# secret sits before it has been committed at all. Dropping either one leaves a
+# real case uncovered.
+#
+# There is no husky here and there will not be one: this repository carries no
+# Node manifest, so there is no pnpm install to hang a prepare script on. The
+# hook is a plain versioned file, and install-hooks.sh points core.hooksPath at
+# this directory. That local setting overrides the core.hooksPath of /dev/null
+# set globally on the workstation, which is what makes every unwired hook on
+# this machine silently inert.
+set -euo pipefail
+
+SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts"
+
+# git feeds one line per ref being pushed: <local ref> <local sha> <remote ref>
+# <remote sha>. An all-zero local sha means the ref is being deleted, and there
+# is nothing to read. An all-zero remote sha means the branch is new on the
+# remote, so everything reachable from it is about to be sent and the range is
+# left empty, which scans the whole history.
+#
+# Run by hand from a terminal there is no such input, and reading would hang
+# waiting for someone to type. The terminal test below is what keeps the script
+# usable outside git.
+ZERO="0000000000000000000000000000000000000000"
+RANGES=()
+SCAN_ALL=0
+HAD_INPUT=0
+while [ ! -t 0 ] && read -r _local_ref local_sha _remote_ref remote_sha; do
+	HAD_INPUT=1
+	[ "$local_sha" = "$ZERO" ] && continue
+	if [ "$remote_sha" = "$ZERO" ]; then
+		SCAN_ALL=1
+		continue
+	fi
+	RANGES+=("$remote_sha..$local_sha")
+done
+
+# No input at all means someone ran the hook by hand, and the safe reading of
+# that is the whole history. A push that only deletes refs sends no object, so
+# there is nothing to read and the tree scan below still runs.
+if [ "$HAD_INPUT" -eq 0 ] || [ "$SCAN_ALL" -eq 1 ]; then
+	"$SCRIPTS/history-scan.sh"
+elif [ ${#RANGES[@]} -gt 0 ]; then
+	# Expanded through ${#RANGES[@]} rather than iterated blind: bash 3.2, which
+	# is the one shipped with macOS, treats "${RANGES[@]}" on an empty array as
+	# an unset variable and set -u then kills the hook.
+	for range in "${RANGES[@]}"; do
+		"$SCRIPTS/history-scan.sh" "$range"
+	done
+fi
+
+exec "$SCRIPTS/security-scan.sh"

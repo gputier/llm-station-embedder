@@ -57,6 +57,16 @@ is meant to run on someone else's machine with three paths changed.
   varies by installation goes in a variable at the top of the file, or in an
   environment variable.
 
+## Before your first push
+
+Run `./scripts/install-hooks.sh` once in your clone. It wires the versioned
+pre-push hook, which reads the commits you are about to send and the working
+tree you are sending them from, looking for plaintext secrets and
+misconfigurations before anything reaches a public remote. A fresh clone has no
+hooks wired and nothing warns about it, which is the whole reason that script
+prints what git resolved instead of claiming success. Details, requirements and
+what to do when it blocks: [docs/security-gate.md](docs/security-gate.md).
+
 ## Reporting a vulnerability
 
 Not through a pull request. See [SECURITY.md](SECURITY.md).
