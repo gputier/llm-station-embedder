@@ -45,7 +45,9 @@ SCANNERS=(--scanners "vuln,secret,misconfig")
 #
 # The named volume holds the vulnerability database. Without it every run would
 # download it again, which turns a seconds long scan into a minutes long one
-# and makes the hook something people work around.
+# and makes the hook something people work around. Its name is deliberately the
+# same in the other station repositories: they all run the image pinned above,
+# so they read the same database and sharing it saves three downloads.
 TRIVY_IMAGE="${TRIVY_IMAGE:-registry.shpv.work/shpv-dirupt/wiki/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969}"
 TRIVY_CACHE_VOLUME="${TRIVY_CACHE_VOLUME:-llm-station-trivy-cache}"
 
