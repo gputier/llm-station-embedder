@@ -75,7 +75,7 @@ silently; `Select-String` and other cmdlets end up being handed to `cmd`, which
 reports them as unknown commands.
 
 ```bash
-CMD='Get-Content D:\LLM-Setup\llm-err-embed.log -Tail 40'
+CMD='Get-Content D:\llm\llm-err-embed.log -Tail 40'
 ENC=$(python3 -c "import base64,sys; print(base64.b64encode(sys.argv[1].encode('utf-16-le')).decode())" "$CMD")
 ssh user@host "powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $ENC"
 ```

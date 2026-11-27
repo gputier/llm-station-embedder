@@ -32,7 +32,7 @@ You need:
 
 ```powershell
 curl.exe -L --fail --retry 3 `
-  -o D:\models\qwen3-embedding-0.6b\Qwen3-Embedding-0.6B-Q8_0.gguf `
+  -o D:\llm\models\qwen3-embedding-0.6b\Qwen3-Embedding-0.6B-Q8_0.gguf `
   https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/resolve/main/Qwen3-Embedding-0.6B-Q8_0.gguf
 ```
 
@@ -53,8 +53,8 @@ here:
 
 | Variable | Default |
 |---|---|
-| `LLM_ROOT_DIR` | `D:\LLM-Setup` |
-| `LLM_MODELS_DIR` | `D:\models` |
+| `LLM_ROOT_DIR` | `D:\llm` |
+| `LLM_MODELS_DIR` | `D:\llm\models` |
 
 Nothing else in `llm-ctl.ps1` is installation-specific.
 
