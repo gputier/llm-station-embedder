@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('embed','stop','status','logs')]
+  [ValidateSet('embed','nomic','stop','status','logs')]
   [string]$Action,
   [string]$Name,  # optional: for 'stop' and 'logs', targets a named instance
   [int]$Tail = 40 # for 'logs': history lines to show before following live
@@ -9,8 +9,10 @@ param(
 # Paths. Adjust these two to match your machine; nothing else below is
 # installation-specific.
 # ---------------------------------------------------------------------------
-$RootDir   = if ($env:LLM_ROOT_DIR) { $env:LLM_ROOT_DIR } else { 'D:\LLM-Setup' }
-$ModelsDir = if ($env:LLM_MODELS_DIR) { $env:LLM_MODELS_DIR } else { 'D:\models' }
+# Everything lives under one folder of D: since 2026-11-27, so the whole
+# station goes away by deleting D:\llm.
+$RootDir   = if ($env:LLM_ROOT_DIR) { $env:LLM_ROOT_DIR } else { 'D:\llm' }
+$ModelsDir = if ($env:LLM_MODELS_DIR) { $env:LLM_MODELS_DIR } else { 'D:\llm\models' }
 
 # ---------------------------------------------------------------------------
 # One llama.cpp build here, Vulkan backend, and that is not a default: it is
@@ -24,11 +26,14 @@ $workDir = $RootDir
 $instDir = "$RootDir\instances"
 New-Item -ItemType Directory -Force -Path $instDir | Out-Null
 
-# One profile, one port. This box used to serve six chat profiles that were all
-# mutually exclusive on the card; it now serves embeddings and nothing else.
-# The table is kept because the rest of the script indexes into it, and because
-# a second profile would slot in here without touching anything below.
-$ports = @{ embed = 8080 }
+# One port per profile, and the two profiles run SIDE BY SIDE. This box used to
+# serve six chat profiles that were all mutually exclusive on the card; it now
+# serves embeddings and nothing else, and two embedders fit together on 8 GB.
+# 'embed' (Qwen3) serves the WorkingTeam office. 'nomic' serves the RecyNetwork
+# blog duplicate check, whose thresholds were calibrated on nomic vectors: the
+# two models do not rank the same neighbours (same top-1 neighbour on 461 of
+# 935 known near-duplicates, measured 2026-09-29), so neither replaces the other.
+$ports = @{ embed = 8080; nomic = 8081 }
 
 # Shared by every model block below. Without it, any web page open on any
 # machine of the LAN can query this server through the user's browser: a
@@ -87,10 +92,13 @@ function Get-VramUsedMb {
   return [int][math]::Round($sum / 1MB)
 }
 
-function Wait-VramReleased($timeoutSec = 30) {
+# Only the processes that were just killed are waited for. Waiting for every
+# llama-server instead would burn the whole timeout whenever the OTHER profile
+# is running, since it never exits.
+function Wait-VramReleased($procIds, $timeoutSec = 30) {
   $deadline = (Get-Date).AddSeconds($timeoutSec)
 
-  while ((Get-Date) -lt $deadline -and (Get-Process -Name llama-server -ErrorAction SilentlyContinue)) {
+  while ((Get-Date) -lt $deadline -and @($procIds | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }).Count -gt 0) {
     Start-Sleep -Milliseconds 250
   }
 
@@ -123,7 +131,7 @@ function Stop-One($name) {
 
 function Stop-All {
   $procs = Get-Process -Name llama-server -ErrorAction SilentlyContinue
-  if ($procs) { $procs | Stop-Process -Force; Wait-VramReleased; Write-Output "STOPPED all" }
+  if ($procs) { $procs | Stop-Process -Force; Wait-VramReleased $procs.Id; Write-Output "STOPPED all" }
   else { Write-Output "NOT_RUNNING" }
   Get-ChildItem $instDir -Filter '*.json' -ErrorAction SilentlyContinue | Remove-Item -Force
 }
@@ -164,8 +172,8 @@ function Start-LLM($name, $modelArgs) {
   Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
     Select-Object -ExpandProperty OwningProcess -Unique |
     Where-Object { $killed -notcontains $_ -and (Get-Process -Id $_ -ErrorAction SilentlyContinue).ProcessName -eq 'llama-server' } |
-    ForEach-Object { Write-Output "KILLED_ORPHAN pid=$_ port=$port"; Kill-Pid $_ }
-  Wait-VramReleased
+    ForEach-Object { Write-Output "KILLED_ORPHAN pid=$_ port=$port"; Kill-Pid $_; $killed += $_ }
+  Wait-VramReleased $killed
 
   $outLog = "$RootDir\llm-out-$name.log"
   $errLog = "$RootDir\llm-err-$name.log"
@@ -272,26 +280,25 @@ switch ($Action) {
       # every similarity computed from them is quietly wrong. Nothing reports
       # it. Source: the model card published by Qwen.
       '--pooling','last',
-      # 8192, not the model's native 32768, and --parallel 1 with it.
+      # 32768 shared by 4 slots: each slot gets 8192 tokens (llama.cpp splits -c
+      # between the slots, so -c is the TOTAL, not the per-request window).
       #
-      # -c is what a SINGLE input may weigh, and it is billed as KV cache the
-      # moment the server starts, used or not. Measured here 2026-09-07, delta
-      # against an idle card: 32768 costs 5462 MB of video memory, 8192 costs
-      # 2699 MB. Nothing on this box needs to embed a 32k-token text in one
-      # piece, and the ingestion curve below rules it out anyway, so the window
-      # was cut and 2.7 GB handed back.
+      # -c is billed as KV cache the moment the server starts, used or not.
+      # Measured here 2026-09-07, delta against an idle card: 32768 costs 5462 MB
+      # of video memory, 8192 costs 2699 MB. Changed 2026-10-06 from -c 8192
+      # --parallel 1 to -c 32768 --parallel 4: the office brain-worker sends
+      # bursts of concurrent requests, with chunks of 2048 to 3400 tokens and
+      # sometimes more, that a single slot serialised. Cost: about 2.7 GB more
+      # video memory, which the card holds next to the nomic profile. 8 slots of
+      # 4096 was tried the same day and refused texts above 4096 tokens: slots
+      # do not add throughput (the card computes one batch at a time), so the
+      # slot size matters more than the slot count.
       #
-      # A LOT is not capped by -c: 1000 sentences totalling 16890 tokens are
-      # served in one call, because each input is embedded on its own. Only an
-      # individual text above 8192 tokens is refused, cleanly, with HTTP 400 and
-      # a message naming both figures.
-      #
-      # --parallel 1 because WITHOUT it llama.cpp opens FOUR slots and SPLITS -c
-      # between them, so the window announced by /props is four times what a
-      # single request gets. Found on this box 2026-09-02 by reading total_slots,
-      # after a profile had been written wrong.
-      '-c','8192',
-      '--parallel','1',
+      # A LOT is not capped by -c: each input of a call is embedded on its own.
+      # An individual text above 8192 tokens (the slot size) is refused, with
+      # HTTP 400 and a message naming both figures.
+      '-c','32768',
+      '--parallel','4',
       # Qwen's own launch line for this model uses -ub 8192. It does NOT hold
       # here, and the reason is the card: at 8192 the Vulkan backend fails to
       # allocate its pinned buffer and falls back silently, logging
@@ -323,6 +330,37 @@ switch ($Action) {
       # do not throw: they produce a similarity of zero between everything.
       '--host','0.0.0.0',
       '--port','8080',
+      '--log-colors','off',
+      '--cors-origins',$CorsOrigins
+    )
+    break
+  }
+
+  'nomic' {
+    # nomic-embed-text-v1.5, Q8_0, 768 dimensions, for the RecyNetwork blog
+    # duplicate check. Same GGUF as the one PC-GUILLAUME used to serve (SHA-256
+    # 3E243421...C3B7), so the existing semantic index and its 0.85 / 0.72
+    # thresholds stay valid. PC-GUILLAUME's card is reserved for ComfyUI.
+    Start-LLM 'nomic' @(
+      '-m',"$ModelsDir\nomic-embed-text-v1.5\nomic-embed-text-v1.5.Q8_0.gguf",
+      # The duplicate-check server matches the loaded model by the substring
+      # 'nomic' in the id /v1/models reports.
+      '--alias','nomic-embed-text-v1.5',
+      '-ngl','99',
+      '--embedding',
+      # MEAN, not last: the opposite of the Qwen3 profile above, and just as
+      # silent when wrong.
+      '--pooling','mean',
+      # 2048 is the model's training window; a title plus a description stays
+      # far below it.
+      '-c','2048',
+      '--parallel','1',
+      '-b','2048',
+      '-ub','2048',
+      '--no-mmap',
+      '--mlock',
+      '--host','0.0.0.0',
+      '--port','8081',
       '--log-colors','off',
       '--cors-origins',$CorsOrigins
     )
